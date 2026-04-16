@@ -24,9 +24,15 @@ This Home Assistant blueprint provides an advanced logic to control a fan (or he
 
 ## Installation
 
-1.  Copy the YAML code into a new file in your Home Assistant `blueprints/automation/` directory (e.g., `diff_temp_control.yaml`).
-2.  Reload your Blueprints or restart Home Assistant.
-3.  Create a new Automation based on this blueprint.
+You can easily import this blueprint by clicking the button below:
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fscrap-code%2Fha-blueprint-dtcontrol%2Fmain%2Fdtcontrol.yaml)
+
+### Manual Installation
+1. Copy the URL of the `dtcontrol.yaml` file.
+2. Go to your Home Assistant instance.
+3. Navigate to **Settings** > **Automations & Scenes** > **Blueprints**.
+4. Click **Import Blueprint** and paste the URL.
 
 ## Configuration Guide
 

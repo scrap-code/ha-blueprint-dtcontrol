@@ -1,0 +1,225 @@
+blueprint:
+  name: Differential Temperature Control Pro
+  description: >
+    Controls a fan based on the temperature difference between two rooms.
+    Includes efficiency check (differential), timeout, cooldown, and schedule integration.
+  domain: automation
+  input:
+    temp_sensor_a:
+      name: Source Temperature Sensor (Room A)
+      description: Sensor in the warmer room (source).
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+    temp_sensor_b:
+      name: Target Temperature Sensor (Room B)
+      description: Sensor in the cooler room (target) to be heated.
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+    temp_storage:
+      name: Temperature Storage Helper
+      description: An 'input_number' helper to store the temperature from the last interval.
+      selector:
+        entity:
+          domain: input_number
+    fan_switch:
+      name: Fan Actuator
+      description: The switch or smart plug controlling the fan.
+      selector:
+        entity:
+          domain: switch
+    automation_enabler:
+      name: Automation Master Switch
+      description: An 'input_boolean' to enable or disable this automation.
+      selector:
+        entity:
+          domain: input_boolean
+    schedule_limit:
+      name: Operation Schedule
+      description: A schedule helper or sensor defining when the fan is allowed to run.
+      selector:
+        entity:
+    min_temp_a:
+      name: Minimum Source Temperature
+      description: Room A must be at least this warm for the fan to start.
+      default: 18
+      selector:
+        number:
+          min: 0
+          max: 40
+          unit_of_measurement: "°C"
+          mode: box
+    target_temp_b:
+      name: Target Temperature Room B
+      description: Stop fan once Room B reaches this temperature.
+      default: 21
+      selector:
+        number:
+          min: 0
+          max: 40
+          unit_of_measurement: "°C"
+          mode: box
+    dt_start:
+      name: Start Differential (dT Start)
+      description: Fan starts when A is warmer than B by this value.
+      default: 4
+      selector:
+        number:
+          min: 1
+          max: 20
+          unit_of_measurement: "K"
+          mode: slider
+    dt_stop:
+      name: Stop Differential (dT Stop)
+      description: Fan stops when difference falls below this value (hysteresis).
+      default: 1.5
+      selector:
+        number:
+          min: 0.5
+          max: 10
+          unit_of_measurement: "K"
+          mode: slider
+    timeout_duration:
+      name: Maximum Runtime (Timeout)
+      description: Maximum fan runtime in minutes.
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 480
+          unit_of_measurement: "min"
+          mode: box
+    cooldown_duration:
+      name: Cooldown Period
+      description: Waiting time after a timeout or failed efficiency check.
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 480
+          unit_of_measurement: "min"
+          mode: box
+    differential_check:
+      name: Enable Efficiency Check
+      description: Checks if Room B's temperature actually rises within the check interval.
+      default: false
+      selector:
+        boolean:
+    min_gain:
+      name: Minimum Temperature Gain
+      description: (Only for Efficiency Check) Required rise in Room B.
+      default: 0.2
+      selector:
+        number:
+          min: 0.0
+          max: 2.0
+          step: 0.1
+          unit_of_measurement: "K"
+          mode: slider
+    check_interval:
+      name: Check Interval
+      description: (Only for Efficiency Check) Time period for the required gain.
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: "min"
+          mode: slider
+
+mode: restart
+
+trigger:
+  - platform: state
+    entity_id: !input temp_sensor_a
+  - platform: state
+    entity_id: !input temp_sensor_b
+  - platform: state
+    entity_id: !input schedule_limit
+    to: "on"
+
+condition:
+  - condition: state
+    entity_id: !input automation_enabler
+    state: "on"
+  - condition: state
+    entity_id: !input schedule_limit
+    state: "on"
+  - condition: state
+    entity_id: !input fan_switch
+    state: "off"
+  - condition: template
+    value_template: "{{ states(temp_sensor_a) | float > states(temp_sensor_b) | float + states(dt_start) | float }}"
+  - condition: template
+    value_template: "{{ states(temp_sensor_a) | float > states(min_temp_a) | float }}"
+  - condition: template
+    value_template: "{{ states(temp_sensor_b) | float < states(target_temp_b) | float }}"
+
+action:
+  - service: input_number.set_value
+    target:
+      entity_id: !input temp_storage
+    data:
+      value: "{{ states(temp_sensor_b) | float }}"
+      
+  - service: switch.turn_on
+    target:
+      entity_id: !input fan_switch
+  
+  - alias: "Monitoring Loop"
+    repeat:
+      while:
+        - condition: state
+          entity_id: !input fan_switch
+          state: "on"
+      sequence:
+        - wait_for_trigger:
+            - platform: template
+              value_template: >
+                {{ states(temp_sensor_b) | float >= states(target_temp_b) | float or
+                   states(temp_sensor_a) | float < states(temp_sensor_b) | float + states(dt_stop) | float }}
+          timeout:
+            minutes: "{{ states(check_interval) | int }}"
+          continue_on_timeout: true
+
+        - alias: "Evaluate Stop Conditions"
+          choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ wait.trigger == none and differential_check }}"
+                - condition: template
+                  value_template: >
+                    {{ states(temp_sensor_b) | float < (states(temp_storage) | float + states(min_gain) | float) }}
+              sequence:
+                - service: switch.turn_off
+                  target:
+                    entity_id: !input fan_switch
+                - delay:
+                    minutes: "{{ states(cooldown_duration) | int }}"
+
+            - conditions:
+                - condition: template
+                  value_template: "{{ repeat.index * states(check_interval) | int >= states(timeout_duration) | int }}"
+              sequence:
+                - service: switch.turn_off
+                  target:
+                    entity_id: !input fan_switch
+                - delay:
+                    minutes: "{{ states(cooldown_duration) | int }}"
+
+            - conditions:
+                - condition: template
+                  value_template: "{{ wait.trigger != none }}"
+              sequence:
+                - service: switch.turn_off
+                  target:
+                    entity_id: !input fan_switch
+
+        - service: input_number.set_value
+          target:
+            entity_id: !input temp_storage
+          data:
+            value: "{{ states(temp_sensor_b) | float }}"

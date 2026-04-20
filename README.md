@@ -49,3 +49,7 @@ After each fan cycle a `Cooldown` period prevents immediate restart.
 | Enable Efficiency Check | false | Halt fan if Room B isn't warming fast enough |
 | Minimum Temperature Gain | 0.2 K | Required rise in Room B per check interval |
 | Check Interval | 15 min | How often the efficiency baseline is evaluated |
+
+## License
+
+GNU GPL v3 — see [LICENSE](LICENSE).

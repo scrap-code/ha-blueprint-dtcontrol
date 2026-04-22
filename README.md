@@ -50,6 +50,10 @@ After each fan cycle a `Cooldown` period prevents immediate restart.
 | Minimum Temperature Gain | 0.2 K | Required rise in Room B per check interval |
 | Check Interval | 15 min | How often the efficiency baseline is evaluated |
 
+## Companion Card
+
+The [Differential Temperature Card](https://github.com/scrap-code/ha-card-difftemp) is a custom Lovelace card built for this blueprint. It shows a target temperature slider, live room temperatures, fan status with a runtime counter, and a colour-coded delta-T display (green above 3 K, yellow 0-3 K, red when source is cooler than target). Installable via HACS.
+
 ## License
 
 GNU GPL v3 — see [LICENSE](LICENSE).
